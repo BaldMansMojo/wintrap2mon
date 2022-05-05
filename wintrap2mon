@@ -1,0 +1,422 @@
+#!/usr/bin/perl
+
+# Author: Martin Fuerstenau, Canon Production Printing Germany
+#         martin.fuerstenau_at_cpp.canon
+#
+# Date:   17 Feb 2020
+# 
+# Purpose and features of the program:
+#
+# - Processing SNMP traps from Windows systems with snmptt and Nagios, Naemon, Icinga.....
+#
+# Structure of a Microsoft eventlog SNMP trap:
+#
+# .1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.108.101.97.110.117.112.83.101.114.118.105.99.101.0.50100
+#  I I I I I I  I  I  I I  I  I                                                                                                                                         I   I
+#  I I I I I I  I  I  I I  I  +------------------------------------------------------------------+----------------------------------------------------------------------+   I  
+#  I I I I I I  I  I  I I  I                                                                     I                                                                          I
+#  I I I I I I  I  I  I I  I                                                           source name in ASCII characters                                                      I                                                                                                                                              I
+#  I I I I I I  I  I  I I  I                                                                                                                                                I
+#  I I I I I I  I  I  I I  I                                                                                                                                eventID <-------+
+#  I I I I I I  I  I  I I  +--> Number of characters in source name 
+#  I I I I I I  I  I  I I
+#  I I I I I I  I  I  I +--> evntagent
+#  I I I I I I  I  I  I
+#  I I I I I I  I  I  +--> evntlog
+#  I I I I I I  I  I
+#  I I I I I I  I  +--> software
+#  I I I I I I  I 
+#  I I I I I I  +--> microsoft
+#  I I I I I I
+#  I I I I I +--> enterprises
+#  I I I I I
+#  I I I I +--> private
+#  I I I I
+#  I I I +-> internet
+#  I I I
+#  I I +--> dod
+#  I I
+#  I +--> org
+#  I
+#  +--> iso
+
+
+#--- Start presets and declarations -------------------------------------
+
+
+use strict;
+
+use Getopt::Long;
+
+
+my $ProgName="wintrap2mon";                               # Name of program
+
+my $eventID;                                              # The event ID from the trap
+my $eventText;                                            # The event message text. The message data
+                                                          # is populated with the variable data below. 
+my $eventSystem;                                          # The computername of the host that generated
+                                                          # the event.
+my $eventType;                                            # The numeric code value of the event type.
+my $eventCategory;                                        # The numeric code value of the event category.
+my $eventOID;                                             # Enterprise trap OID in number format
+my $state;                                                # State cause by event. Can be:
+                                                          #
+                                                          # - OK
+                                                          # - Warning
+                                                          # - Critical
+                                                          #
+                                                          # Case insensitive
+                                              
+my $eventSource;                                          # Event source from MS event system
+my @ascii_character_numbers;                              # These chars will enhence the OIDs.
+my @ascii_character_numbers_tmp;                          # These chars will enhence the OIDs.
+my $CharCount;                                            # Number of valid characters.in array
+my $LoopCnt;                                              # Loop counter
+
+my $nag_pipe;                                             # The nagios command file (named pipe)
+my $nag_pipe_def="/var/cache/naemon/objects/naemon.cmd";  # Default for the nagios command  file (named pipe)
+
+my $NoA;                                                  # Number of arguments handled over
+                                                          # the program
+my $help;                                                 # For printing the help message
+
+my $tolower;                                              # It may happen that a Windows host sends its hostname in upper case letters
+                                                          # but in monitor system it is defined as lower case. With this flag upper case
+                                                          # will be converted to lower case
+
+my $multiline;                                            # Multiline output in overview. This mean technically that
+                                                          # a multiline output uses a HTML <br> for the GUI instead of
+                                                          # Be aware that your messing connections (email, SMS...) must use
+                                                          # a filter to file out the <br>. A sed oneliner like the following
+                                                          # will do the job:
+                                                          # sed 's/<[^<>]*>//g'
+
+my $multiline_def="\n";                                   # Default for $multiline;
+
+my $service_description;                                  # Service Description from Nagios (Naemon, icinga...)
+                                                          # Normally it will be generated (source name + space + eventID)
+                                                          # With this option it can be overwritten. But in case of overriding
+                                                          # it must be the same for all systems
+
+my $sd_before;                                            # Service description string before generated (source + space event)
+my $sd_mid;                                               # Service description string in the middle generated (source + space event)
+my $sd_after;                                             # Service description string after generated (source + space event)
+
+my $timestamp=time();                                     # Sets the Timestamp for submitting result to monitor system
+my $result;                                               # Will contain the result to be transmitted to monitor system
+my $alarm_reset;                                          # With $alarm_reset set immediately after an alert an OK will be send.
+                                                          # this behaviour is produce and log messages without any interaction
+                                                          # or freshness checks
+
+#--- End presets --------------------------------------------------------
+
+# First we have to fix  the number of arguments
+
+$NoA=$#ARGV;
+
+
+# Right number of arguments (therefore NOA :-)) )
+
+if ( $NoA == -1 )
+   {
+   print_usage();
+   exit 1;
+   }
+
+Getopt::Long::Configure('bundling');
+GetOptions
+	("h"   => \$help,    "help"                  => \$help,
+	 "s=s" => \$state,   "state=s"               => \$state,
+	 "c=s" => \$state,   "commandfilepipe=s"     => \$nag_pipe,
+                             "alarm_reset"           => \$alarm_reset,
+                             "multiline"             => \$multiline,
+                             "tolower"               => \$tolower,  
+	                     "service_description=s" => \$service_description,
+	                     "sd_before=s"           => \$sd_before,
+	                     "sd_mid=s"              => \$sd_mid,
+	                     "sd_after=s"            => \$sd_after,
+	                     "eventCategory=s"       => \$eventCategory,
+	                     "eventID=s"             => \$eventID,
+	                     "eventSystem=s"         => \$eventSystem,
+	                     "eventText=s"           => \$eventText,
+	                     "eventType=s"           => \$eventType,
+	                     "eventOID=s"            => \$eventOID);
+
+
+# Only help?
+
+if ($help)
+   {
+   print_help();
+   exit 0;
+   }
+
+# Multiline output in GUI overview?
+if ($multiline)
+   {
+   $multiline = "<br>";
+   }
+else
+   {
+   $multiline = $multiline_def;
+   }
+
+# Overwrite monitoring command pipe
+if (!defined($nag_pipe))
+   {
+   $nag_pipe = $nag_pipe_def;
+   }
+
+if (defined($state))
+   {
+   if ($state =~ m/^O.*$/i)
+      {
+      $state=0;
+      }
+   else
+      {
+      if ($state =~ m/^C.*$/i)
+         {
+         $state=2;
+         }
+      else
+         {
+         if ($state =~ m/^W.*$/i)
+            {
+            $state=1;
+            }
+         else
+            {
+            print "No valid state given!\n\n";
+            print_help();
+            exit 2;
+            }
+         }
+      }
+   }
+else
+   {
+   print "No state given.\n\n";
+   print_help();
+   exit 2;
+   }
+
+if (!defined($eventID))
+   {
+   print "No eventID given.\n\n";
+   print_help();
+   exit 2;
+   }
+
+if (defined($eventSystem))
+   {
+   $eventSystem =~ s/\..*//;
+   if (defined($eventSystem))
+      {
+      $eventSystem = lc $eventSystem;
+      }
+   }
+else
+   {
+   print "No eventSystem given.\n\n";
+   print_help();
+   exit 2;
+   }
+
+if (defined($eventOID))
+   {
+
+   # We cut off the stuff we don't need.
+   # 1.3.6.1.4.1.311.1.13.1 because this only means "a trap from MS windows
+   # and the last 1 is a <SOH> (Start of heading) wich signals signals that
+   # now the source name is starting. The next field will also be cut because
+   # it signals the number of characters in ASCII the source name is long.
+
+   $eventOID =~ s/\.1\.3\.6\.1\.4\.1\.311\.1\.13\.1\.//;
+
+   $CharCount = $eventOID;
+   $CharCount =~ s/\..*$//;
+   
+   $eventOID =~ s/^$CharCount\.//;
+   $eventOID =~ s/\./ /g;
+
+   @ascii_character_numbers_tmp  = split / /, $eventOID;
+   
+   # We had the problem that on end of $eventOI was a zero resulting in a <nul> after conversion.
+   # But we are not sure if it is always so. Therfore we transfer exactly the number of characters
+   # given by the counter. That's sure.
+   
+   for ($LoopCnt=0;$LoopCnt<$CharCount;$LoopCnt++)
+       {
+       $ascii_character_numbers[$LoopCnt] = $ascii_character_numbers_tmp[$LoopCnt];
+       }
+   
+   $eventSource = pack("C*", @ascii_character_numbers);
+   }
+else
+   {
+   print "No eventOID given.\n\n";
+   print_help();
+   exit 2;
+   }
+
+if (defined($eventText))
+   {
+   # So this field contains more than one line. Normally a newline (\n or <LF> - line feed) is a white space 
+   # character and it is therefore handled as one. Bin in Windows wie <CR>+<LF> and so we have to deal with a remaining
+   # <CR> which should be converted int a newline.
+   
+   $eventText =~ s/\r/$multiline/g;
+
+   # Remove the last multiline regardless whether it is \n or <br>
+   $eventText =~ s/$multiline$//;
+
+   }
+else
+   {
+   print "No event text given.\n\n";
+   print_help();
+   exit 2;
+   }
+
+if (!defined($service_description))
+   {
+   if ((defined($sd_before)) || (defined($sd_mid)) || (defined($sd_after)))
+      {
+      if (defined($sd_mid))
+         {
+         $service_description = $eventSource . $sd_mid . $eventID;
+         }
+      else
+         {
+         $service_description = $eventSource . " " . $eventID;
+         }
+      if (defined($sd_before))
+         {
+         $service_description = $sd_before . $service_description;
+         }
+      if (defined($sd_after))
+         {
+         $service_description = $service_description . $sd_after;
+         }
+      }
+   else
+      {
+      $service_description = $eventSource . " " . $eventID;
+      }
+   }
+
+
+open(NAG_CMD, ">> $nag_pipe");
+
+$result = "[$timestamp] PROCESS_SERVICE_CHECK_RESULT;$eventSystem;$service_description;$state;$eventText\n";
+
+print NAG_CMD "$result";
+
+if (defined($alarm_reset))
+   {
+   $timestamp=time();
+   $eventText = "Event automatically resetted immediately after causing an alert.";
+   $result = "[$timestamp] PROCESS_SERVICE_CHECK_RESULT;$eventSystem;$service_description;0;$eventText\n";
+   print NAG_CMD "$result";
+   }
+
+close(NAG_CMD);
+
+sub print_usage
+    {
+    print "\nUsage: \n\n$ProgName ";
+    print "--eventID=<event ID> ";
+    print "--eventText=<event message text> ";
+    print "--eventSystem=<computername> ";
+    print "--eventType=<numeric value the event type> ";
+    print "--eventCategory=<numeric value event category.> ";
+    print "--eventOID=<eventOID> ";
+    print "[[--service_description=<service_description> ] | ";
+    print "[--sd_before=<string>] ";
+    print "[--sd_mid=<string>] ";
+    print "[--sd_after=<string>]]" ;
+    print "-s <state>|--state=<state> ";
+    print "-c <cmdfile>|--commandfile=<cmdfile> ";
+    print "|--alarm_reset] ";
+    print "|--tolower] ";
+    print "[--multiline]\n\n";
+    print "  or\n\n";
+    print "$ProgName -h\n\n";
+    }
+
+sub print_help
+    {
+    print "\n";
+    print "Copyright (c) 2020 Martin Fuerstenau\n";
+    print "\nUsage: \n\n$ProgName ";
+    print "--eventID=<event ID> ";
+    print "--eventText=<event message text> ";
+    print "--eventSystem=<computername> ";
+    print "--eventType=<numeric value the event type> ";
+    print "--eventCategory=<numeric value event category.> ";
+    print "--eventOID=<eventOID> ";
+    print "[[--service_description=<service_description> ] | ";
+    print "[--sd_before=<string>] ";
+    print "[--sd_mid=<string>] ";
+    print "[--sd_after=<string>]]" ;
+    print "-s <state>|--state=<state> ";
+    print "-c <cmdfile>|--commandfile=<cmdfile> ";
+    print "|--alarm_reset] ";
+    print "|--tolower] ";
+    print "[--multiline]\n\n";
+    print "-s, --state=<state>                              State caused by event for monitor (Nagios,\n";
+    print "                                                 Naemon, icinga...\n";
+    print "\n";
+    print "                                                 Ok -> Service ok\n";
+    print "                                                 Warning -> Service Warning\n";
+    print "                                                 Critical -> Service critical\n";
+    print "\n"; 
+    print "    --alarm_reset                                With --alarm_reset set immediately after an alert an OK will be send\n";
+    print "                                                 this behaviour is produce and log messages without any interaction\n";
+    print "                                                 or freshness checks (optional).\n";
+    print "\n"; 
+    print "-c, --commandfile=<cmdfile>                      The nagios command file (named pipe).\n";
+    print "                                                 If not set default (optional).\n";
+    print "\n";
+    print "                                                 /var/cache/naemon/objects/naemon.cmd\n";
+    print "\n";
+    print "                                                 will take place.\n";
+    print "\n";
+    print "                                                 The values are case insensitive. Everything entered from\n";
+    print "                                                 letter up to the complete word is ok\n";
+    print "\n";
+    print "    --service_description=<service_description>  Service Description from Nagios (Naemon, icinga...)\n";
+    print "                                                 Normally it will be generated (source name + space + eventID)\n";
+    print "                                                 With this option it can be overwritten. But in case of overriding\n";
+    print "                                                 it must be the same for all systems. (optional) \n";
+    print "\n";
+    print "                                                 The following options cannot be used in conmjunction with --service_description!!\n";
+    print "\n";
+    print "    --sd_before=<string>                         Service description string before generated (source + space event).\n";
+    print "    --sd_mid=<string>                            Service description string in the middle generated (source + space event).\n";
+    print "    --sd_after=<string>                          Service description string after generated (source + space event).\n";
+    print "\n";
+    print "    --eventID=<event ID>                         The event ID used by MS Windows submitted\n";
+    print "                                                 as last OID otf the trap.\n";
+    print "    --eventText=<text>                           The event message text. The message data\n";
+    print "                                                 is populated with the variable data below.\n";
+    print "    --eventSystem=<computername>                 The name of the host that generated the event.\n";
+    print "    --eventType=<value event type>               The numeric code value of the event type.\n";
+    print "    --eventCategory=<value event category.>      The numeric code value of the event category.\n";
+    print "    --eventOID=<eventOID>                        Enterprise trap OID in number format.\n";
+    print "\n";
+    print "    --multiline                                  Multiline output in overview. This means\n";
+    print "                                                 technically that a multiline output uses\n";
+    print "                                                 a HTML <br> for the GUI instead of\\n. Be\n";
+    print "                                                 aware that your messing connections (email,\n";
+    print "                                                 SMS...) must use a filter to file out the <br>.\n";
+    print "                                                 A sed oneliner like the following the job:\n";
+    print "\n";
+    print "                                                 sed 's/<[^<>]*>//g'\n";
+    print "\n";
+    print "    -- tolower                                  It may happen that a Windows host sends its hostname\n";
+    print "                                                in upper case letters but in monitor system it is defined\n";
+    print "                                                as lower case. With this flag upper case will be converted to\n";
+    print "                                                lower case.\n";
+    }

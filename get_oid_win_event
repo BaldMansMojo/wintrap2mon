@@ -1,0 +1,146 @@
+#!/usr/bin/perl
+
+# Author: Martin Fuerstenau, Canon Production Printing Germany
+#         martin.fuerstenau_at_cpp.canon
+#
+# Date:   9 Feb 2021
+# 
+# Purpose and features of the program:
+#
+# -Translating received OID for processing SNMP traps from Windows systems with snmptt and Nagios, Naemon, Icinga..... to event source and eventID
+#  for checking received events
+#
+# Structure of a Microsoft eventlog SNMP trap:
+#
+# .1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.108.101.97.110.117.112.83.101.114.118.105.99.101.0.50100
+#  I I I I I I  I  I  I I  I  I                                                                                                                                         I   I
+#  I I I I I I  I  I  I I  I  +------------------------------------------------------------------+----------------------------------------------------------------------+   I  
+#  I I I I I I  I  I  I I  I                                                                     I                                                                          I
+#  I I I I I I  I  I  I I  I                                                           source name in ASCII characters                                                      I                                                                                                                                              I
+#  I I I I I I  I  I  I I  I                                                                                                                                                I
+#  I I I I I I  I  I  I I  I                                                                                                                                eventID <-------+
+#  I I I I I I  I  I  I I  +--> Number of characters in source name 
+#  I I I I I I  I  I  I I
+#  I I I I I I  I  I  I +--> evntagent
+#  I I I I I I  I  I  I
+#  I I I I I I  I  I  +--> evntlog
+#  I I I I I I  I  I
+#  I I I I I I  I  +--> software
+#  I I I I I I  I 
+#  I I I I I I  +--> microsoft
+#  I I I I I I
+#  I I I I I +--> enterprises
+#  I I I I I
+#  I I I I +--> private
+#  I I I I
+#  I I I +-> internet
+#  I I I
+#  I I +--> dod
+#  I I
+#  I +--> org
+#  I
+#  +--> iso
+
+
+#--- Start presets and declarations -------------------------------------
+
+
+use strict;
+
+use Getopt::Long;
+
+
+my $ProgName="get_oid_win_event";                 # Name of program
+my $eventID;                                      # The event ID from the trap
+my $eventOID;                                     # Enterprise trap OID in number format
+my @eventOID;                                     # Every character from event OID as element of an array
+my $eventOIDLength;                               # Enterprise trap OID in number format
+my $eventSource;                                  # Event source from MS event system
+my $eventSourceLength;
+my $BaseOID=".1.3.6.1.4.1.311.1.13.1";            # Base OID according to description above.
+my $loopcnt;                                      # Loop counter for for loop
+my $NoA;                                          # Number of arguments handled over
+                                                  # the program
+my $help;                                         # For printing the help message
+
+#--- End presets --------------------------------------------------------
+
+# First we have to fix  the number of arguments
+
+$NoA=$#ARGV;
+
+
+# Right number of arguments (therefore NOA :-)) )
+
+if ( $NoA == -1 )
+   {
+   print_usage();
+   exit 1;
+   }
+
+Getopt::Long::Configure('bundling');
+GetOptions
+	("h"   => \$help,    "help"                  => \$help,
+	                     "eventOID=s"            => \$eventOID);
+
+if ($help)
+   {
+   print_help();
+   exit 0;
+   }
+
+if (!defined $eventOID)
+   {
+   print "\nEvent OID missing.\n\n";
+   exit 2;
+   }
+
+
+$BaseOID =~ s/\./\\\./g;
+$eventOID =~ s/^$BaseOID\.//;
+
+# Split OID into an array
+@eventOID = split /\./, $eventOID;
+$eventSourceLength = $eventOID[0];
+
+# Remove the first element of the array
+splice @eventOID, 0, 1;
+
+$eventOIDLength = scalar @eventOID;
+
+# -1 is important because arry index starts with 0
+$eventID = $eventOID[$eventOIDLength - 1];
+
+# Remove 2 last elements of array
+splice @eventOID, -2;
+$eventOIDLength = scalar @eventOID;
+
+for ( $loopcnt=0;$loopcnt<$eventOIDLength;$loopcnt++)
+    {
+#    $eventOID = $eventOID . "." . ord($eventSource[$loopcnt]);
+     $eventSource =  $eventSource . chr($eventOID[$loopcnt]);
+    }
+print "Event Source: $eventSource\n";
+print "EventID: $eventID\n";
+exit 0;
+
+
+#--- Begin subroutines --------------------------------------------------
+
+sub print_usage
+    {
+    print "\nUsage: \n\n$ProgName ";
+    print "--eventOID=<event OID>\n\n";
+    print "  or\n\n";
+    print "$ProgName -h\n\n";
+    }
+
+sub print_help
+    {
+    print "\n";
+    print "Copyright (c) 2021 Martin Fuerstenau\n";
+    print "\nUsage: \n\n$ProgName ";
+    print "--eventOID=<event OID>\n\n";
+    print "--eventOID=<event OID>                       The event OID submitted by MS Windows.\n";
+    print "                                             It will be translated to event source and event ID.\n";
+    }
