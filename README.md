@@ -172,7 +172,7 @@ gen_oid_win_event works the oter way round. It takes the Event Source and EventI
 ### wintrap2mon options
 
 ```
-wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=<computername> --eventType=<numeric value the event type> --eventCategory=<numeric value event category.> --eventOID=<eventOID> \[\[--service\_description=<service\_description> \] | \[--sd\_before=<string>\] \[--sd\_mid=<string>\] \[--sd\_after=<string>\]\]-s <state>|--state=<state> -c <cmdfile>|--commandfile=<cmdfile> |--alarm\_reset\] |--tolower\] \[--multiline\]
+wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=<computername> --eventType=<numeric value the event type> --eventCategory=<numeric value event category.> --eventOID=<eventOID> \[\[--service_description=<service_description> \] | \[--sd_before=<string>\] \[--sd_mid=<string>\] \[--sd_after=<string>\]\]-s <state>|--state=<state> -c <cmdfile>|--commandfile=<cmdfile> |--alarm\_reset\] |--tolower\] \[--multiline\]
 
 -s, --state=<state>                              State caused by event for monitor (Nagios,
                                                  Naemon, icinga...
@@ -195,16 +195,16 @@ wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=
                                                  The values are case insensitive. Everything entered from
                                                  letter up to the complete word is ok
 
-    --service\_description=<service\_description>  Service Description from Nagios (Naemon, icinga...)
+    --service_description=<service_description>  Service Description from Nagios (Naemon, icinga...)
                                                  Normally it will be generated (source name + space + eventID)
                                                  With this option it can be overwritten. But in case of overriding
                                                  it must be the same for all systems. (optional)
 
                                                  The following options cannot be used in conmjunction with --service\_description!!
 
-    --sd\_before=<string>                         Service description string before generated (source + space event).
-    --sd\_mid=<string>                            Service description string in the middle generated (source + space event).
-    --sd\_after=<string>                          Service description string after generated (source + space event).
+    --sd_before=<string>                         Service description string before generated (source + space event).
+    --sd_mid=<string>                            Service description string in the middle generated (source + space event).
+    --sd_after=<string>                          Service description string after generated (source + space event).
 
     --eventID=<event ID>                         The event ID used by MS Windows submitted
                                                  as last OID otf the trap.
