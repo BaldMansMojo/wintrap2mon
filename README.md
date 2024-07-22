@@ -128,6 +128,22 @@ For general installation and configuration follow the steps on [http://www.snmpt
  +--> iso
 ```
 
+### Windows Event Types and how to ignore them
+<p>Success (numerical 0)<br>
+Error (numerical 1)<br>
+Warning (numerical 2)<br>
+Information (numerical 4)<br>
+Audit Success (numerical 8)<br>
+Audit Failure (numerical 10)<br></p>
+
+The following options will be used to ignore unwanted types
+<p>--ignoreAuditFailure<br>
+--ignoreAuditSuccess<br>
+--ignoreError<br>
+--ignoreInformation<br>
+--ignoreSuccess<br>
+--ignoreWarning<br></p>
+
 ### Sample definition for snmptt
 
 ```
