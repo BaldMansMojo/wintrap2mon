@@ -131,10 +131,10 @@ For general installation and configuration follow the steps on [http://www.snmpt
 ### Sample definition for snmptt
 
 ```
-EVENT RemoteServicesSchedulerConnectService .1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.111.110.110.101.99.116.83.101.114.118.105.99.101.0.50001 "Status Events" Normal
+EVENT TheNumberOfTheBeast .1.3.6.1.4.1.311.1.13.1.19.84.104.101.78.117.109.98.101.114.79.102.84.104.101.66.101.97.115.116.0.666 "Status Events" Normal
 REGEX (\\\`)(')g
 FORMAT $\*
-EXEC /usr/local/monitoring/win\_events/wintrap2mon --eventText="$1" --eventSystem="$3" --eventType="$4" --eventID=50001 --eventCategory="$5" --state=OK --eventOID=$e --multiline --sd\_mid=" Event:" --tolower
+EXEC /usr/local/monitoring/win_events/wintrap2mon_2.0 --eventText="$1" --eventSystem="$3" --eventType="$4" --eventID=50100 --eventCategory="$5" --ignoreInformation --eventOID=$e --multiline --sd_mid=" Event:" --sd_after=" - technical error" --tolower
 SDESC
 Get the traps from the event system
 Variables:
@@ -150,40 +150,30 @@ EDESC
 
 ### Helper tools
 
+#### gen_oid_win_event
+
+gen_oid_win_event will take EventID and Event Source as input and genereates the OID. With this little tool you can create the configuration for snmptt before getting the event as trap.
+
+```
+./gen_oid_win_event --eventID=666 --eventsrc=TheNumberOfTheBeast
+.1.3.6.1.4.1.311.1.13.1.19.84.104.101.78.117.109.98.101.114.79.102.84.104.101.66.101.97.115.116.0.666
+```
 #### get_oid_win_event
 
 get_oid_win_event will take a logged OID from snmpttunknown.log and outputs the Event Source and the EventID.
 
 ```
-./get_oid_win_event --eventOID=.1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.111.110.110.101.99.116.83.101.114.118.105.99.101.0.50001
-Event Source: RemoteServicesSchedulerConnectService
-EventID: 50001
+./get_oid_win_event --eventOID=.1.3.6.1.4.1.311.1.13.1.19.84.104.101.78.117.109.98.101.114.79.102.84.104.101.66.101.97.115.116.0.666
+Event Source: TheNumberOfTheBeast
+EventID: 666
 ```
 
-#### gen_oid_win_event
 
-gen_oid_win_event works the oter way round. It takes the Event Source and EventID as input and genereates the OID. With this little tool you can create the configuration for snmptt before getting the event as trap.
-
-```
-./gen_oid_win_event --eventID=50001 --eventsrc=RemoteServicesSchedulerConnectService
-.1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.111.110.110.101.99.116.83.101.114.118.105.99.101.0.50001
-```
 
 ### wintrap2mon options
 
 ```
-wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=<computername> --eventType=<numeric value the event type> --eventCategory=<numeric value event category.> --eventOID=<eventOID> \[\[--service_description=<service_description> \] | \[--sd_before=<string>\] \[--sd_mid=<string>\] \[--sd_after=<string>\]\]-s <state>|--state=<state> -c <cmdfile>|--commandfile=<cmdfile> |--alarm\_reset\] |--tolower\] \[--multiline\]
-
--s, --state=<state>                              State caused by event for monitor (Nagios,
-                                                 Naemon, icinga...
-
-                                                 Ok -> Service ok
-                                                 Warning -> Service Warning
-                                                 Critical -> Service critical
-
-    --alarm\_reset                                With --alarm\_reset set immediately after an alert an OK will be send
-                                                 this behaviour is produce and log messages without any interaction
-                                                 or freshness checks (optional).
+wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=<computername> --eventType=<numeric value the event type> --eventCategory=<numeric value event category.> --eventOID=<eventOID> [--ignoreAuditFailure] [--ignoreAuditSuccess] [--ignoreError] [--ignoreInformation] [--ignoreSuccess] [--ignoreWarning] [--service_description=<service_description> ] [--sd_before=<string>] [--sd_mid=<string>] [--sd_after=<string>]-c <cmdfile>|--commandfile=<cmdfile> |--alarm_reset] |--tolower] [--multiline]
 
 -c, --commandfile=<cmdfile>                      The nagios command file (named pipe).
                                                  If not set default (optional).
@@ -192,15 +182,26 @@ wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=
 
                                                  will take place.
 
+    --alarm_reset                                With --alarm_reset set immediately after an alert an OK will be send
+                                                 this behaviour is produce and log messages without any interaction
+                                                 or freshness checks (optional).
+
                                                  The values are case insensitive. Everything entered from
                                                  letter up to the complete word is ok
+
+    --ignoreAuditFailure                         Ignore audit failure (numerical 10)
+    --ignoreAuditSuccess                         Ignore audit success (numerical 8)
+    --ignoreError                                Ignore error (numerical 1)
+    --ignoreInformation                          Ignore information (numerical 4)
+    --ignoreSuccess                              Ignore success (numerical 0)
+    --ignoreWarning                              Ignore warning (numerical 2)
 
     --service_description=<service_description>  Service Description from Nagios (Naemon, icinga...)
                                                  Normally it will be generated (source name + space + eventID)
                                                  With this option it can be overwritten. But in case of overriding
-                                                 it must be the same for all systems. (optional)
+                                                 it must be the same for all systems. (optional) 
 
-                                                 The following options cannot be used in conmjunction with --service\_description!!
+                                                 The following options cannot be used in conmjunction with --service_description!!
 
     --sd_before=<string>                         Service description string before generated (source + space event).
     --sd_mid=<string>                            Service description string in the middle generated (source + space event).
@@ -217,12 +218,12 @@ wintrap2mon --eventID=<event ID> --eventText=<event message text> --eventSystem=
 
     --multiline                                  Multiline output in overview. This means
                                                  technically that a multiline output uses
-                                                 a HTML <br> for the GUI instead of\\n. Be
+                                                 a HTML <br> for the GUI instead of\n. Be
                                                  aware that your messing connections (email,
                                                  SMS...) must use a filter to file out the <br>.
                                                  A sed oneliner like the following the job:
 
-                                                 sed 's/<\[^<>\]\*>//g'
+                                                 sed 's/<[^<>]*>//g'
 
     -- tolower                                  It may happen that a Windows host sends its hostname
                                                 in upper case letters but in monitor system it is defined
