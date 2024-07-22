@@ -150,7 +150,6 @@ if ( $NoA == -1 )
 Getopt::Long::Configure('bundling');
 GetOptions
 	("h"   => \$help,      "help"                  => \$help,
-	 "s=s" => \$state,     "state=s"               => \$state,
 	 "c=s" => \$nag_pipe,  "commandfilepipe=s"     => \$nag_pipe,
                                "alarm_reset"           => \$alarm_reset,
                                "multiline"             => \$multiline,
@@ -403,7 +402,6 @@ sub print_usage
     print "[--sd_before=<string>] ";
     print "[--sd_mid=<string>] ";
     print "[--sd_after=<string>]]" ;
-    print "-s <state>|--state=<state> ";
     print "-c <cmdfile>|--commandfile=<cmdfile> ";
     print "|--alarm_reset] ";
     print "|--tolower] ";
@@ -429,26 +427,14 @@ sub print_help
     print "[--ignoreInformation] ";
     print "[--ignoreSuccess] ";
     print "[--ignoreWarning] ";
-    print "[[--service_description=<service_description> ] | ";
+    print "[--service_description=<service_description> ] | ";
     print "[--sd_before=<string>] ";
     print "[--sd_mid=<string>] ";
-    print "[--sd_after=<string>]]" ;
-    print "-s <state>|--state=<state> ";
+    print "[--sd_after=<string>]" ;
     print "-c <cmdfile>|--commandfile=<cmdfile> ";
     print "|--alarm_reset] ";
     print "|--tolower] ";
     print "[--multiline]\n\n";
-    print "-s, --state=<state>                              State caused by event for monitor (Nagios,\n";
-    print "                                                 Naemon, icinga...\n";
-    print "\n";
-    print "                                                 Ok -> Service ok\n";
-    print "                                                 Warning -> Service Warning\n";
-    print "                                                 Critical -> Service critical\n";
-    print "\n"; 
-    print "    --alarm_reset                                With --alarm_reset set immediately after an alert an OK will be send\n";
-    print "                                                 this behaviour is produce and log messages without any interaction\n";
-    print "                                                 or freshness checks (optional).\n";
-    print "\n"; 
     print "-c, --commandfile=<cmdfile>                      The nagios command file (named pipe).\n";
     print "                                                 If not set default (optional).\n";
     print "\n";
@@ -456,6 +442,10 @@ sub print_help
     print "\n";
     print "                                                 will take place.\n";
     print "\n";
+    print "    --alarm_reset                                With --alarm_reset set immediately after an alert an OK will be send\n";
+    print "                                                 this behaviour is produce and log messages without any interaction\n";
+    print "                                                 or freshness checks (optional).\n";
+    print "\n"; 
     print "                                                 The values are case insensitive. Everything entered from\n";
     print "                                                 letter up to the complete word is ok\n";
     print "\n";
