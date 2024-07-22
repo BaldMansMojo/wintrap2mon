@@ -9,6 +9,24 @@
 #
 # - Processing SNMP traps from Windows systems with snmptt and Nagios, Naemon, Icinga.....
 #
+# Changes:
+# - Version 2.0 01 Jul 2024
+#   - Added support for event types:
+#     Success (numerical 0)
+#     Error (numerical 1)
+#     Warning (numerical 2)
+#     Information (numerical 4)
+#     Audit Success (numerical 8)
+#     Audit Failure (numerical 10)
+#   - Removed handing over state from command line. Instead of this the event type is used.
+#   - Added options
+#     --ignoreAuditFailure;                                   # Ignore audit failure (numerical 10)
+#     --ignoreAuditSuccess;                                   # Ignore audit success (numerical 8)
+#     --ignoreError;                                          # Ignore error (numerical 1)
+#     --ignoreInformation;                                    # Ignore information (numerical 4)
+#     --ignoreSuccess;                                        # Ignore success (numerical 0)
+#     --ignoreWarning;                                        # Ignore warning (numerical 2)
+
 # Structure of a Microsoft eventlog SNMP trap:
 #
 # .1.3.6.1.4.1.311.1.13.1.37.82.101.109.111.116.101.83.101.114.118.105.99.101.115.83.99.104.101.100.117.108.101.114.67.108.101.97.110.117.112.83.101.114.118.105.99.101.0.50100
@@ -107,6 +125,12 @@ my $result;                                               # Will contain the res
 my $alarm_reset;                                          # With $alarm_reset set immediately after an alert an OK will be send.
                                                           # this behaviour is produce and log messages without any interaction
                                                           # or freshness checks
+my $ignoreAuditFailure;                                   # Ignore audit failure (numerical 10)
+my $ignoreAuditSuccess;                                   # Ignore audit success (numerical 8)
+my $ignoreError;                                          # Ignore error (numerical 1)
+my $ignoreInformation;                                    # Ignore information (numerical 4)
+my $ignoreSuccess;                                        # Ignore success (numerical 0)
+my $ignoreWarning;                                        # Ignore warning (numerical 2)
 
 #--- End presets --------------------------------------------------------
 
@@ -125,22 +149,28 @@ if ( $NoA == -1 )
 
 Getopt::Long::Configure('bundling');
 GetOptions
-	("h"   => \$help,    "help"                  => \$help,
-	 "s=s" => \$state,   "state=s"               => \$state,
-	 "c=s" => \$state,   "commandfilepipe=s"     => \$nag_pipe,
-                             "alarm_reset"           => \$alarm_reset,
-                             "multiline"             => \$multiline,
-                             "tolower"               => \$tolower,  
-	                     "service_description=s" => \$service_description,
-	                     "sd_before=s"           => \$sd_before,
-	                     "sd_mid=s"              => \$sd_mid,
-	                     "sd_after=s"            => \$sd_after,
-	                     "eventCategory=s"       => \$eventCategory,
-	                     "eventID=s"             => \$eventID,
-	                     "eventSystem=s"         => \$eventSystem,
-	                     "eventText=s"           => \$eventText,
-	                     "eventType=s"           => \$eventType,
-	                     "eventOID=s"            => \$eventOID);
+	("h"   => \$help,      "help"                  => \$help,
+	 "s=s" => \$state,     "state=s"               => \$state,
+	 "c=s" => \$nag_pipe,  "commandfilepipe=s"     => \$nag_pipe,
+                               "alarm_reset"           => \$alarm_reset,
+                               "multiline"             => \$multiline,
+                               "tolower"               => \$tolower,  
+                               "service_description=s" => \$service_description,
+                               "sd_before=s"           => \$sd_before,
+                               "sd_mid=s"              => \$sd_mid,
+                               "sd_after=s"            => \$sd_after,
+                               "eventCategory=s"       => \$eventCategory,
+                               "ignoreAuditFailure"    => \$ignoreAuditFailure,
+                               "ignoreAuditSuccess"    => \$ignoreAuditSuccess,
+                               "ignoreError"           => \$ignoreError,
+                               "ignoreInformation"     => \$ignoreInformation,
+                               "ignoreSuccess"         => \$ignoreSuccess,
+                               "ignoreWarning"         => \$ignoreWarning,
+                               "eventID=s"             => \$eventID,
+                               "eventSystem=s"         => \$eventSystem,
+                               "eventText=s"           => \$eventText,
+                               "eventType=s"           => \$eventType,
+                               "eventOID=s"            => \$eventOID);
 
 
 # Only help?
@@ -167,36 +197,67 @@ if (!defined($nag_pipe))
    $nag_pipe = $nag_pipe_def;
    }
 
-if (defined($state))
+#     Success (numerical 0)
+#     Error (numerical 1)
+#     Warning (numerical 2)
+#     Information (numerical 4)
+#     Audit Success (numerical 8)
+#     Audit Failure (numerical 10)
+
+if (defined($eventType))
    {
-   if ($state =~ m/^O.*$/i)
+   if ($eventType == 0)
       {
+      if (defined($ignoreSuccess))
+         {
+         exit 0;
+         }
       $state=0;
       }
-   else
+   if ($eventType == 1)
       {
-      if ($state =~ m/^C.*$/i)
+      if (defined($ignoreError))
          {
-         $state=2;
+         exit 0;
          }
-      else
+      $state=2;
+      }
+   if ($eventType == 2)
+      {
+      if (defined($ignoreWarning))
          {
-         if ($state =~ m/^W.*$/i)
-            {
-            $state=1;
-            }
-         else
-            {
-            print "No valid state given!\n\n";
-            print_help();
-            exit 2;
-            }
+         exit 0;
          }
+      $state=1;
+      }
+   if ($eventType == 4)
+      {
+      if (defined($ignoreInformation))
+         {
+         exit 0;
+         }
+      $state=0;
+      }
+   if ($eventType == 8)
+      {
+      if (defined($ignoreAuditSuccess))
+         {
+         exit 0;
+         }
+      $state=0;
+      }
+   if ($eventType == 10)
+      {
+      if (defined($ignoreAuditFailure))
+         {
+         exit 0;
+         }
+      $state=2;
       }
    }
 else
    {
-   print "No state given.\n\n";
+   print "No event type submitted.\n\n";
    print_help();
    exit 2;
    }
@@ -332,6 +393,12 @@ sub print_usage
     print "--eventType=<numeric value the event type> ";
     print "--eventCategory=<numeric value event category.> ";
     print "--eventOID=<eventOID> ";
+    print "[--ignoreAuditFailure] ";
+    print "[--ignoreAuditSuccess] ";
+    print "[--ignoreError] ";
+    print "[--ignoreInformation] ";
+    print "[--ignoreSuccess] ";
+    print "[--ignoreWarning] ";
     print "[[--service_description=<service_description> ] | ";
     print "[--sd_before=<string>] ";
     print "[--sd_mid=<string>] ";
@@ -356,6 +423,12 @@ sub print_help
     print "--eventType=<numeric value the event type> ";
     print "--eventCategory=<numeric value event category.> ";
     print "--eventOID=<eventOID> ";
+    print "[--ignoreAuditFailure] ";
+    print "[--ignoreAuditSuccess] ";
+    print "[--ignoreError] ";
+    print "[--ignoreInformation] ";
+    print "[--ignoreSuccess] ";
+    print "[--ignoreWarning] ";
     print "[[--service_description=<service_description> ] | ";
     print "[--sd_before=<string>] ";
     print "[--sd_mid=<string>] ";
@@ -385,6 +458,13 @@ sub print_help
     print "\n";
     print "                                                 The values are case insensitive. Everything entered from\n";
     print "                                                 letter up to the complete word is ok\n";
+    print "\n";
+    print "    --ignoreAuditFailure                         Ignore audit failure (numerical 10)\n";
+    print "    --ignoreAuditSuccess                         Ignore audit success (numerical 8)\n";
+    print "    --ignoreError                                Ignore error (numerical 1)\n";
+    print "    --ignoreInformation                          Ignore information (numerical 4)\n";
+    print "    --ignoreSuccess                              Ignore success (numerical 0)\n";
+    print "    --ignoreWarning                              Ignore warning (numerical 2)\n";
     print "\n";
     print "    --service_description=<service_description>  Service Description from Nagios (Naemon, icinga...)\n";
     print "                                                 Normally it will be generated (source name + space + eventID)\n";
